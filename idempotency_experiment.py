@@ -1,4 +1,3 @@
-
 import json
 import time
 
@@ -19,17 +18,21 @@ def main():
             if not reset.ok:
                 raise RuntimeError(f"Reset failed: HTTP {reset.status}")
 
-            operation_id = "idem-demo-001"
             key = "stable-key-001"
 
             headers = {
                 "Content-Type": "application/json",
                 "Idempotency-Key": key,
             }
-            body = json.dumps({"operation_id": operation_id})
 
             for attempt in range(1, 3):
-                print(f"\nAttempt {attempt}")
+                operation_id = (
+                    "idem-demo-001" if attempt == 1
+                    else "different-operation-002"
+                )
+                print(f"\nAttempt {attempt}: {operation_id}")
+
+                body = json.dumps({"operation_id": operation_id})
 
                 try:
                     response = api.post(

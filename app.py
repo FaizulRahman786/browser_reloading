@@ -44,11 +44,20 @@ def index():
 
 @app.post("/submit")
 @app.post("/submit")
+
+@app.post("/submit")
 def submit():
+    import hashlib
+    import json
+
     payload = request.get_json(silent=True) or {}
     operation_id = str(payload.get("operation_id", "unknown"))
-    commit = request.args.get("commit", "1") == "1"
     idempotency_key = request.headers.get("Idempotency-Key")
+    commit = request.args.get("commit", "1") == "1"
+
+    request_hash = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
     delay = min(
         max(request.args.get("delay", default=2, type=float), 0),
@@ -56,7 +65,6 @@ def submit():
     )
 
     with _lock:
-        # A repeated key represents the same intended operation.
         existing = next(
             (
                 item for item in _submissions
@@ -67,16 +75,26 @@ def submit():
         )
 
         if existing:
+            if existing["request_hash"] != request_hash:
+                return jsonify({
+                    "error": "idempotency_key_payload_conflict",
+                    "message": (
+                        "This key was already used with a different payload."
+                    ),
+                }), 409
+
             result = {
-                "message": "Duplicate request detected; original result reused.",
+                "message": "Duplicate request; original operation reused.",
                 "operation_id": existing["operation_id"],
                 "duplicate": True,
             }
+
         else:
             if commit:
                 _submissions.append({
                     "operation_id": operation_id,
                     "idempotency_key": idempotency_key,
+                    "request_hash": request_hash,
                     "recorded_at": time.time(),
                 })
 
@@ -88,6 +106,7 @@ def submit():
 
     time.sleep(delay)
     return jsonify(result)
+
 
 @app.get("/status")
 def status():
