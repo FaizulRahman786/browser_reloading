@@ -41,24 +41,53 @@ PAGE = """
 def index():
     return render_template_string(PAGE)
 
+
+@app.post("/submit")
 @app.post("/submit")
 def submit():
     payload = request.get_json(silent=True) or {}
     operation_id = str(payload.get("operation_id", "unknown"))
-    # Simulate the side effect occurring BEFORE the confirmation is returned.
-    with _lock:
-        _submissions.append({
-            "operation_id": operation_id,
-            "recorded_at": time.time()
-        })
-        count = len(_submissions)
+    commit = request.args.get("commit", "1") == "1"
+    idempotency_key = request.headers.get("Idempotency-Key")
 
-    delay = min(max(request.args.get("delay", default=2, type=float), 0), 5)
+    delay = min(
+        max(request.args.get("delay", default=2, type=float), 0),
+        5
+    )
+
+    with _lock:
+        # A repeated key represents the same intended operation.
+        existing = next(
+            (
+                item for item in _submissions
+                if idempotency_key
+                and item.get("idempotency_key") == idempotency_key
+            ),
+            None,
+        )
+
+        if existing:
+            result = {
+                "message": "Duplicate request detected; original result reused.",
+                "operation_id": existing["operation_id"],
+                "duplicate": True,
+            }
+        else:
+            if commit:
+                _submissions.append({
+                    "operation_id": operation_id,
+                    "idempotency_key": idempotency_key,
+                    "recorded_at": time.time(),
+                })
+
+            result = {
+                "message": "Request processed.",
+                "operation_id": operation_id,
+                "duplicate": False,
+            }
+
     time.sleep(delay)
-    return jsonify({
-        "message": f"Server confirmed operation. Total recorded submissions: {count}",
-        "count_at_processing": count
-    })
+    return jsonify(result)
 
 @app.get("/status")
 def status():
