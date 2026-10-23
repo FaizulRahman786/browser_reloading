@@ -1,12 +1,15 @@
 import json
+import os
 import time
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-BASE_URL = "http://127.0.0.1:5055"
+BASE_URL = os.environ.get(
+    "BROWSER_RECOVERY_BASE_URL", "http://127.0.0.1:5055"
+)
 
 def main():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         page.goto(BASE_URL)
 

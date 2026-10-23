@@ -1,8 +1,11 @@
 
 import json
+import os
 from playwright.sync_api import sync_playwright
 
-BASE_URL = "http://127.0.0.1:5055"
+BASE_URL = os.environ.get(
+    "BROWSER_RECOVERY_BASE_URL", "http://127.0.0.1:5055"
+)
 KEY = "conflict-test-001"
 
 
