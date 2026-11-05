@@ -21,6 +21,7 @@ The Playwright browser download is needed only for browser-driven experiments. I
 - `recovery.py` demonstrates a browser-driven timeout/status check.
 - `scenario11_evidence_freshness.py` validates simulated evidence metadata and returns a conservative recovery decision.
 - `tests/test_research.py` uses Flask's test client, Werkzeug's local server helper, and standard-library `unittest`. Scenario 12's pre-commit hook and events are deterministic test synchronization, not production coordination or a security feature.
+- `phase2_recovery.py` is a separate, deterministic comparison of blind retry, idempotency-only retry, current evidence deferral, and an experimental quorum/settlement gate. It does not modify the Flask app or prior experiments.
 
 `/status` is a snapshot at observation time. Seeing no record means only that no matching record appeared in that snapshot; it does not prove that a request still in flight cannot commit. The in-memory idempotency index, source-trust Boolean, timestamp checks, and test probe are not production-grade guarantees.
 
@@ -84,6 +85,24 @@ Synthetic rule-based experiments do not need a server:
 .\.venv\Scripts\python.exe .\recovery_policy_benchmark.py
 ```
 
+Phase 2's comparison and separate regression tests also run without a server:
+
+```powershell
+.\.venv\Scripts\python.exe .\phase2_recovery.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_phase2.py" -v
+```
+
+The Phase 2 benchmark uses 10 fixed synthetic scenarios, repeated 20 times per policy. Reported latency is a modeled cost in milliseconds, not measured wall-clock time. See [PHASE2_RESEARCH_REPORT.md](./PHASE2_RESEARCH_REPORT.md) for the prior-art notes, policy definitions, detailed metrics, and why the candidate was not accepted as a safe mechanism.
+
+Phase 3 adds a separate service-finality model and compares five policies on the same 15 deterministic fixtures, repeated 20 times per policy:
+
+```powershell
+.\.venv\Scripts\python.exe .\phase3_finality.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_phase3.py" -v
+```
+
+The new controller accepts only operation-bound authenticated receipts with modeled service semantics or authoritative terminal status with an explicit finality guarantee. Idempotency-only retry is considered side-effect-safe only when the model declares atomic key/effect handling and freezes the payload; it does not confirm completion without a verifiable retry receipt. Other outcomes remain unresolved for reconciliation. These are simulated service contracts, not guarantees implemented by the Flask app. See [PHASE3_RESEARCH_REPORT.md](./PHASE3_RESEARCH_REPORT.md) for assumptions, fixture outcomes, actual comparative results, limitations, and prior-art review.
+
 ## Troubleshooting
 
 - **Port 5055 is occupied:** identify the listener before taking action:
@@ -104,5 +123,6 @@ Synthetic rule-based experiments do not need a server:
 - Scenarios 9–11 and the recovery-policy benchmark are deterministic rule checks over synthetic inputs. Their cases are not independent real-world experiments.
 - `ABSENT` is not proof of finality. A retry after an absence observation is only the prototype's policy; in practice it is safe only if the target operation has suitable idempotency semantics.
 - `source_trusted` is an assumed label, not source authentication. Timestamps are metadata, and the `sequence` field does not prove freshness, ordering, or finality.
+- The Phase 2 quorum candidate assumes distinct source labels correspond to independent sources and assumes a valid maximum operation duration. The simulator deliberately includes false quorum and late-commit cases where those assumptions fail.
 - The prototype has no durable storage, multi-process consistency, authenticated receipts, transactional boundary, or production security controls.
 - No novelty, patentability, production readiness, statistical significance, or real-world reliability improvement has been established. See [FINAL_RESEARCH_REPORT.md](./FINAL_RESEARCH_REPORT.md).
